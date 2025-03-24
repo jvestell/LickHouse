@@ -122,11 +122,10 @@ class FretboardView(QGraphicsView):
             
         for note in measure_data["notes"]:
             string_idx = note.get("string")
-            fret = note.get("fret")
             x = note.get("x", 0)
             y = note.get("y", 0)
             
-            if string_idx is not None and fret is not None:
+            if string_idx is not None:
                 # Create note circle with text
                 circle = QGraphicsEllipseItem(-10, -10, 20, 20)
                 circle.setBrush(QBrush(self.note_color))
@@ -135,24 +134,24 @@ class FretboardView(QGraphicsView):
                 self.scene.addItem(circle)
                 self.note_items.append(circle)
                 
-                # Add fret number text
-                text = QGraphicsTextItem(str(fret))
-                text.setDefaultTextColor(self.text_color)
-                text.setFont(QFont("Arial", 9, QFont.Bold))
+                # Add fret number or technique text
+                if "fret" in note:
+                    text = QGraphicsTextItem(str(note["fret"]))
+                    text.setDefaultTextColor(self.text_color)
+                    text.setFont(QFont("Arial", 9, QFont.Bold))
+                elif "technique" in note:
+                    text = QGraphicsTextItem(note["technique"])
+                    text.setDefaultTextColor(Qt.black)
+                    text.setFont(QFont("Arial", 9, QFont.Bold))
+                else:
+                    continue
+                
                 # Center the text in the circle
                 text_width = text.boundingRect().width()
                 text_height = text.boundingRect().height()
                 text.setPos(x - text_width/2, y - text_height/2)
                 self.scene.addItem(text)
                 self.note_items.append(text)
-                
-                # Add notation for techniques if present
-                technique = note.get("technique")
-                if technique:
-                    tech_text = self.scene.addText(technique, QFont("Arial", 8))
-                    tech_text.setDefaultTextColor(Qt.black)
-                    tech_text.setPos(x + 15, y - 25)
-                    self.note_items.append(tech_text)
     
     def clear_tablature(self):
         """Clear all tablature notes but keep the fretboard"""
@@ -193,12 +192,6 @@ class FretboardView(QGraphicsView):
             # Get the dropped item text
             dropped_text = event.mimeData().text()
             
-            # If it's a technique, use the calculated fret
-            if not dropped_text.isdigit():
-                technique = dropped_text
-            else:
-                technique = None
-            
             # Ensure valid string
             if 0 <= string_idx < self.string_count:
                 # Add note to the current measure
@@ -206,11 +199,16 @@ class FretboardView(QGraphicsView):
                     # Add new note with exact position
                     note = {
                         "string": string_idx,
-                        "fret": int(dropped_text) if dropped_text.isdigit() else None,
-                        "technique": technique,
                         "x": pos.x(),
                         "y": pos.y()
                     }
+                    
+                    # Handle both fret numbers and techniques
+                    if dropped_text.isdigit():
+                        note["fret"] = int(dropped_text)
+                    else:
+                        note["technique"] = dropped_text
+                    
                     self.measures[self.current_measure]["notes"].append(note)
                     
                     # Redraw tablature
