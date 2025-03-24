@@ -123,11 +123,10 @@ class FretboardView(QGraphicsView):
         for note in measure_data["notes"]:
             string_idx = note.get("string")
             fret = note.get("fret")
+            x = note.get("x", 0)
+            y = note.get("y", 0)
             
             if string_idx is not None and fret is not None:
-                y = self.top_margin + (string_idx * self.string_spacing)
-                x = self.left_margin + (fret * self.fret_spacing) - (self.fret_spacing / 2)
-                
                 # Create note circle with text
                 circle = QGraphicsEllipseItem(-10, -10, 20, 20)
                 circle.setBrush(QBrush(self.note_color))
@@ -190,53 +189,56 @@ class FretboardView(QGraphicsView):
             
             # Determine string and fret
             string_idx = round((pos.y() - self.top_margin) / self.string_spacing)
-            fret_pos = (pos.x() - self.left_margin) / self.fret_spacing
-            fret = max(0, min(self.fret_count, round(fret_pos)))
             
             # Get the dropped item text
             dropped_text = event.mimeData().text()
             
-            # Check if it's a fret number or technique
-            if dropped_text.isdigit():
-                fret = int(dropped_text)
-                technique = None
-            else:
+            # If it's a technique, use the calculated fret
+            if not dropped_text.isdigit():
                 technique = dropped_text
+            else:
+                technique = None
             
             # Ensure valid string
             if 0 <= string_idx < self.string_count:
-                # Add or update note to the current measure
+                # Add note to the current measure
                 if self.current_measure < len(self.measures):
-                    # Find existing note on this string
-                    existing_note_idx = -1
-                    for i, existing_note in enumerate(self.measures[self.current_measure]["notes"]):
-                        if existing_note.get("string") == string_idx:
-                            existing_note_idx = i
-                            break
-                    
-                    if dropped_text.isdigit():
-                        # Adding/updating a fret number
-                        note = {"string": string_idx, "fret": fret}
-                        if existing_note_idx >= 0:
-                            # Keep technique if it exists
-                            if "technique" in self.measures[self.current_measure]["notes"][existing_note_idx]:
-                                note["technique"] = self.measures[self.current_measure]["notes"][existing_note_idx]["technique"]
-                            # Update existing note
-                            self.measures[self.current_measure]["notes"][existing_note_idx] = note
-                        else:
-                            # Add new note
-                            self.measures[self.current_measure]["notes"].append(note)
-                    else:
-                        # Adding a technique
-                        if existing_note_idx >= 0:
-                            # Update existing note with technique
-                            self.measures[self.current_measure]["notes"][existing_note_idx]["technique"] = technique
+                    # Add new note with exact position
+                    note = {
+                        "string": string_idx,
+                        "fret": int(dropped_text) if dropped_text.isdigit() else None,
+                        "technique": technique,
+                        "x": pos.x(),
+                        "y": pos.y()
+                    }
+                    self.measures[self.current_measure]["notes"].append(note)
                     
                     # Redraw tablature
                     self.clear_tablature()
                     self.draw_tablature(self.measures[self.current_measure])
             
             event.acceptProposedAction()
+    
+    def mousePressEvent(self, event):
+        """Handle mouse press events for note deletion"""
+        if event.button() == Qt.RightButton:
+            pos = self.mapToScene(event.pos())
+            
+            # Check if clicked on a note
+            for note in self.measures[self.current_measure]["notes"]:
+                note_x = note.get("x", 0)
+                note_y = note.get("y", 0)
+                
+                # Check if click is within note bounds (20x20 pixels)
+                if (abs(pos.x() - note_x) <= 10 and abs(pos.y() - note_y) <= 10):
+                    # Remove the note
+                    self.measures[self.current_measure]["notes"].remove(note)
+                    # Redraw tablature
+                    self.clear_tablature()
+                    self.draw_tablature(self.measures[self.current_measure])
+                    break
+        
+        super().mousePressEvent(event)
 
 
 class DraggableButton(QPushButton):
@@ -306,7 +308,7 @@ class LickEditor(QWidget):
         editor_widget.setStyleSheet("background-color: #F5F5F5; border-radius: 10px;")
         editor_layout = QVBoxLayout(editor_widget)
         
-        # Fret number buttons for dragging (1-12)
+        # Fret number buttons for dragging (0-12)
         fret_buttons_layout = QHBoxLayout()
         fret_buttons_layout.addWidget(QLabel("Fret Numbers:"))
         
@@ -314,7 +316,12 @@ class LickEditor(QWidget):
         fret_grid = QHBoxLayout(fret_button_widget)
         fret_grid.setSpacing(5)
         
-        for i in range(1, 13):  # Frets 1-12
+        # Add open string (0) button first
+        open_btn = DraggableButton("0", "0")
+        fret_grid.addWidget(open_btn)
+        
+        # Add fret buttons 1-12
+        for i in range(1, 13):
             btn = DraggableButton(str(i), str(i))
             fret_grid.addWidget(btn)
         
