@@ -40,16 +40,16 @@ class FretboardView(QGraphicsView):
         self.note_items = []
         self.note_text_items = []  # For displaying note names
         
-        # Colors
-        self.background_color = QColor("#F5F5F5")  # Light gray background
-        self.string_color = QColor("#555555")       # Dark gray strings
-        self.fret_color = QColor("#777777")         # Medium gray frets
-        self.nut_color = QColor("#333333")          # Darker gray for nut
-        self.note_color = QColor("#3498DB")         # Matte blue for notes
+        # Modern color scheme
+        self.background_color = QColor("#FFFFFF")  # Pure white background
+        self.string_color = QColor("#333333")       # Dark gray strings
+        self.fret_color = QColor("#666666")         # Medium gray frets
+        self.nut_color = QColor("#000000")          # Black for nut
+        self.note_color = QColor("#2196F3")         # Material blue for notes
         self.text_color = QColor("#FFFFFF")         # White text
-        self.string_label_color = QColor("#2C3E50") # Dark blue-gray for labels
-        self.faint_note_color = QColor(128, 128, 128, 128)  # Semi-transparent gray
-        self.bold_note_color = QColor(64, 64, 64, 255)      # Solid dark gray
+        self.string_label_color = QColor("#333333") # Dark gray for labels
+        self.faint_note_color = QColor(51, 51, 51, 128)  # Semi-transparent dark gray
+        self.bold_note_color = QColor(51, 51, 51, 255)   # Solid dark gray
         
         # Note display state
         self.show_notes = False
@@ -419,19 +419,20 @@ class DraggableButton(QPushButton):
         self.mime_text = mime_text
         self.setFixedSize(40, 40)  # Make buttons square for a cleaner look
         
-        # Apply a nice style
+        # Apply modern style
         self.setStyleSheet("""
             QPushButton {
-                background-color: #3498DB;
+                background-color: #2196F3;
                 color: white;
-                border-radius: 5px;
-                font-weight: bold;
+                border-radius: 4px;
+                font-weight: 500;
+                border: none;
             }
             QPushButton:hover {
-                background-color: #2980B9;
+                background-color: #1976D2;
             }
             QPushButton:pressed {
-                background-color: #1F618D;
+                background-color: #0D47A1;
             }
         """)
     
@@ -454,7 +455,12 @@ class LickEditor(QWidget):
         super().__init__(parent)
         
         # Set background color
-        self.setStyleSheet("background-color: #ECECEC;")
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #FFFFFF;
+                font-family: "Segoe UI", sans-serif;
+            }
+        """)
         
         self.init_ui()
         
@@ -467,36 +473,57 @@ class LickEditor(QWidget):
     def init_ui(self):
         """Initialize the UI components"""
         layout = QVBoxLayout(self)
+        layout.setSpacing(20)
+        layout.setContentsMargins(20, 20, 20, 20)
         
         # Lick title display
         self.title_label = QLabel("New Lick")
-        self.title_label.setFont(QFont("Arial", 16, QFont.Bold))
+        self.title_label.setFont(QFont("Segoe UI", 28, QFont.Light))
         self.title_label.setAlignment(Qt.AlignCenter)
-        self.title_label.setStyleSheet("color: #2C3E50; margin: 5px;")
+        self.title_label.setStyleSheet("""
+            QLabel {
+                color: #333333;
+                margin: 10px;
+                padding: 10px;
+                border-bottom: 1px solid #E0E0E0;
+            }
+        """)
         layout.addWidget(self.title_label)
         
         # Tablature editor area
         editor_widget = QWidget()
-        editor_widget.setStyleSheet("background-color: #F5F5F5; border-radius: 10px;")
+        editor_widget.setStyleSheet("""
+            QWidget {
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
+                border-radius: 8px;
+                padding: 20px;
+            }
+        """)
         editor_layout = QVBoxLayout(editor_widget)
+        editor_layout.setSpacing(15)
         
         # Capo control
         capo_layout = QHBoxLayout()
-        capo_layout.addWidget(QLabel("Capo Position:"))
+        capo_label = QLabel("Capo Position:")
+        capo_label.setStyleSheet("color: #666666; font-weight: 500;")
+        capo_layout.addWidget(capo_label)
         
         self.capo_spinbox = QSpinBox()
         self.capo_spinbox.setRange(0, 12)
         self.capo_spinbox.setValue(0)
         self.capo_spinbox.setStyleSheet("""
             QSpinBox {
-                background-color: white;
-                border: 1px solid #BDC3C7;
-                border-radius: 3px;
+                background-color: #FFFFFF;
+                border: 1px solid #E0E0E0;
+                border-radius: 4px;
                 padding: 5px;
                 min-width: 60px;
+                color: #333333;
+                font-family: "Segoe UI", sans-serif;
             }
             QSpinBox:hover {
-                border: 1px solid #3498DB;
+                border: 1px solid #2196F3;
             }
         """)
         self.capo_spinbox.valueChanged.connect(self.update_capo_position)
@@ -505,38 +532,18 @@ class LickEditor(QWidget):
         
         editor_layout.addLayout(capo_layout)
         
-        # Fret number buttons for dragging (0-12)
-        fret_buttons_layout = QHBoxLayout()
-        fret_buttons_layout.addWidget(QLabel("Fret Numbers:"))
-        
-        fret_button_widget = QWidget()
-        fret_grid = QHBoxLayout(fret_button_widget)
-        fret_grid.setSpacing(5)
-        
-        # Add open string (0) button first
-        open_btn = DraggableButton("0", "0")
-        fret_grid.addWidget(open_btn)
-        
-        # Add fret buttons 1-12
-        for i in range(1, 13):
-            btn = DraggableButton(str(i), str(i))
-            fret_grid.addWidget(btn)
-        
-        fret_buttons_layout.addWidget(fret_button_widget)
-        fret_buttons_layout.addStretch()
-        editor_layout.addLayout(fret_buttons_layout)
-        
         # Note sequence display
         self.note_sequence_label = QLabel("Notes: ")
         self.note_sequence_label.setStyleSheet("""
             QLabel {
-                color: #2C3E50;
-                font-weight: bold;
-                padding: 10px;
+                color: #333333;
+                font-weight: 500;
+                padding: 12px;
                 background-color: #F5F5F5;
-                border-radius: 5px;
+                border-radius: 4px;
                 min-height: 35px;
-                font-size: 16px;
+                font-size: 14px;
+                font-family: "Segoe UI", sans-serif;
             }
         """)
         editor_layout.addWidget(self.note_sequence_label)
@@ -545,13 +552,14 @@ class LickEditor(QWidget):
         self.key_label = QLabel("Key: ")
         self.key_label.setStyleSheet("""
             QLabel {
-                color: #2C3E50;
-                font-weight: bold;
-                padding: 10px;
+                color: #333333;
+                font-weight: 500;
+                padding: 12px;
                 background-color: #F5F5F5;
-                border-radius: 5px;
+                border-radius: 4px;
                 min-height: 35px;
-                font-size: 16px;
+                font-size: 14px;
+                font-family: "Segoe UI", sans-serif;
             }
         """)
         editor_layout.addWidget(self.key_label)
@@ -564,21 +572,25 @@ class LickEditor(QWidget):
         self.show_notes_toggle.setCheckable(True)
         self.show_notes_toggle.setStyleSheet("""
             QPushButton {
-                background-color: #95A5A6;
-                color: white;
-                border-radius: 5px;
-                font-weight: bold;
-                padding: 8px 15px;
+                background-color: #F5F5F5;
+                color: #333333;
+                border-radius: 4px;
+                font-weight: 500;
+                padding: 8px 16px;
                 min-width: 100px;
+                border: 1px solid #E0E0E0;
+                font-family: "Segoe UI", sans-serif;
             }
             QPushButton:checked {
-                background-color: #2ECC71;
+                background-color: #2196F3;
+                color: white;
+                border: none;
             }
             QPushButton:hover {
-                background-color: #7F8C8D;
+                background-color: #E0E0E0;
             }
             QPushButton:checked:hover {
-                background-color: #27AE60;
+                background-color: #1976D2;
             }
         """)
         self.show_notes_toggle.clicked.connect(self.toggle_notes)
@@ -591,24 +603,64 @@ class LickEditor(QWidget):
         self.fretboard = FretboardView()
         editor_layout.addWidget(self.fretboard)
         
+        # Tablature buttons (0-12)
+        tab_buttons_layout = QHBoxLayout()
+        tab_buttons_layout.addWidget(QLabel("Frets:"))
+        
+        # Style for tab buttons
+        tab_btn_style = """
+            QPushButton {
+                background-color: #F5F5F5;
+                color: #333333;
+                border-radius: 4px;
+                font-weight: 500;
+                padding: 8px 12px;
+                min-width: 30px;
+                border: 1px solid #E0E0E0;
+                font-family: "Segoe UI", sans-serif;
+            }
+            QPushButton:hover {
+                background-color: #E0E0E0;
+            }
+            QPushButton:pressed {
+                background-color: #BDBDBD;
+            }
+        """
+        
+        # Create buttons for frets 0-12
+        self.tab_buttons = []
+        for i in range(13):  # 0-12
+            btn = DraggableButton(str(i), str(i))
+            btn.setStyleSheet(tab_btn_style)
+            btn.setFixedWidth(35)
+            self.tab_buttons.append(btn)
+            tab_buttons_layout.addWidget(btn)
+        
+        tab_buttons_layout.addStretch()
+        editor_layout.addLayout(tab_buttons_layout)
+        
         # Technique buttons for dragging
         technique_layout = QHBoxLayout()
-        technique_layout.addWidget(QLabel("Techniques:"))
+        technique_label = QLabel("Techniques:")
+        technique_label.setStyleSheet("color: #666666; font-weight: 500;")
+        technique_layout.addWidget(technique_label)
         
         # Style for technique buttons
         technique_style = """
             QPushButton {
-                background-color: #E74C3C;
-                color: white;
-                border-radius: 5px;
-                font-weight: bold;
-                padding: 8px;
+                background-color: #F5F5F5;
+                color: #333333;
+                border-radius: 4px;
+                font-weight: 500;
+                padding: 8px 16px;
+                border: 1px solid #E0E0E0;
+                font-family: "Segoe UI", sans-serif;
             }
             QPushButton:hover {
-                background-color: #C0392B;
+                background-color: #E0E0E0;
             }
             QPushButton:pressed {
-                background-color: #922B21;
+                background-color: #BDBDBD;
             }
         """
         
@@ -616,9 +668,9 @@ class LickEditor(QWidget):
         self.slide_btn.setStyleSheet(technique_style)
         self.slide_btn.setFixedWidth(80)
         
-        self.hammer_btn = DraggableButton("Hammer-on", "h")
+        self.hammer_btn = DraggableButton("Hammer On", "h")
         self.hammer_btn.setStyleSheet(technique_style)
-        self.hammer_btn.setFixedWidth(80)
+        self.hammer_btn.setFixedWidth(100)  # Increased width for "Hammer On"
         
         self.pull_btn = DraggableButton("Pull-off", "p")
         self.pull_btn.setStyleSheet(technique_style)
@@ -637,49 +689,61 @@ class LickEditor(QWidget):
         # Style for navigation buttons
         nav_btn_style = """
             QPushButton {
-                background-color: #27AE60;
-                color: white;
-                border-radius: 5px;
-                padding: 8px;
+                background-color: #F5F5F5;
+                color: #333333;
+                border-radius: 4px;
+                padding: 8px 16px;
+                border: 1px solid #E0E0E0;
+                font-family: "Segoe UI", sans-serif;
+                font-weight: 500;
             }
             QPushButton:hover {
-                background-color: #229954;
+                background-color: #E0E0E0;
             }
             QPushButton:pressed {
-                background-color: #1E8449;
+                background-color: #BDBDBD;
             }
         """
         
-        self.prev_btn = QPushButton("← Previous Measure")
+        self.prev_btn = QPushButton("← Previous")
         self.prev_btn.setStyleSheet(nav_btn_style)
         self.prev_btn.clicked.connect(self.previous_measure)
         
         self.measure_label = QLabel("Measure 1/1")
         self.measure_label.setAlignment(Qt.AlignCenter)
-        self.measure_label.setStyleSheet("font-weight: bold; color: #2C3E50;")
+        self.measure_label.setStyleSheet("""
+            QLabel {
+                font-weight: 500;
+                color: #333333;
+                font-family: "Segoe UI", sans-serif;
+            }
+        """)
         
-        self.next_btn = QPushButton("Next Measure →")
+        self.next_btn = QPushButton("Next →")
         self.next_btn.setStyleSheet(nav_btn_style)
         self.next_btn.clicked.connect(self.next_measure)
         
-        self.add_measure_btn = QPushButton("+ Add Measure")
+        self.add_measure_btn = QPushButton("+ Add")
         self.add_measure_btn.setStyleSheet(nav_btn_style)
         self.add_measure_btn.clicked.connect(self.add_measure)
         
-        # Add Delete Measure button with red style
-        self.delete_measure_btn = QPushButton("Delete Measure")
+        # Delete Measure button
+        self.delete_measure_btn = QPushButton("Delete")
         self.delete_measure_btn.setStyleSheet("""
             QPushButton {
-                background-color: #E74C3C;
-                color: white;
-                border-radius: 5px;
-                padding: 8px;
+                background-color: #F5F5F5;
+                color: #333333;
+                border-radius: 4px;
+                padding: 8px 16px;
+                border: 1px solid #E0E0E0;
+                font-family: "Segoe UI", sans-serif;
+                font-weight: 500;
             }
             QPushButton:hover {
-                background-color: #C0392B;
+                background-color: #E0E0E0;
             }
             QPushButton:pressed {
-                background-color: #922B21;
+                background-color: #BDBDBD;
             }
         """)
         self.delete_measure_btn.clicked.connect(self.delete_measure)
@@ -699,17 +763,19 @@ class LickEditor(QWidget):
         self.save_btn.setMinimumHeight(40)
         self.save_btn.setStyleSheet("""
             QPushButton {
-                background-color: #9B59B6;
+                background-color: #2196F3;
                 color: white;
-                border-radius: 5px;
-                font-weight: bold;
-                padding: 10px;
+                border-radius: 4px;
+                font-weight: 500;
+                padding: 10px 20px;
+                border: none;
+                font-family: "Segoe UI", sans-serif;
             }
             QPushButton:hover {
-                background-color: #8E44AD;
+                background-color: #1976D2;
             }
             QPushButton:pressed {
-                background-color: #7D3C98;
+                background-color: #0D47A1;
             }
         """)
         self.save_btn.clicked.connect(self.save_lick)
@@ -720,17 +786,19 @@ class LickEditor(QWidget):
         self.delete_btn.setMinimumHeight(40)
         self.delete_btn.setStyleSheet("""
             QPushButton {
-                background-color: #E74C3C;
-                color: white;
-                border-radius: 5px;
-                font-weight: bold;
-                padding: 10px;
+                background-color: #F5F5F5;
+                color: #333333;
+                border-radius: 4px;
+                font-weight: 500;
+                padding: 10px 20px;
+                border: 1px solid #E0E0E0;
+                font-family: "Segoe UI", sans-serif;
             }
             QPushButton:hover {
-                background-color: #C0392B;
+                background-color: #E0E0E0;
             }
             QPushButton:pressed {
-                background-color: #922B21;
+                background-color: #BDBDBD;
             }
         """)
         self.delete_btn.clicked.connect(self.delete_lick)
