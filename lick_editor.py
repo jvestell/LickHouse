@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
                              QScrollArea, QFrame, QGraphicsView, QGraphicsScene, 
                              QGraphicsItem, QGraphicsTextItem, QGraphicsLineItem,
-                             QGraphicsEllipseItem, QMessageBox)
+                             QGraphicsEllipseItem, QMessageBox, QSpinBox)
 from PyQt5.QtCore import Qt, QRectF, QPointF, QMimeData, pyqtSignal
 from PyQt5.QtGui import QPen, QFont, QColor, QBrush, QPainter, QDragEnterEvent, QDropEvent, QDrag
 import json
@@ -25,6 +25,9 @@ class FretboardView(QGraphicsView):
         self.fret_spacing = 60
         self.left_margin = 40
         self.top_margin = 40
+        
+        # Capo position (0 means no capo)
+        self.capo_position = 0
         
         # Current measure and note being edited
         self.current_measure = 0
@@ -83,6 +86,16 @@ class FretboardView(QGraphicsView):
         """Update positions of the note sequence and key labels"""
         pass  # Remove this method as it's no longer needed
     
+    def get_note_at_position(self, string_idx, fret):
+        """Get the actual note at a given string and fret position, accounting for capo"""
+        if fret == 0:  # Open string
+            return self.string_notes[string_idx][self.capo_position]
+        else:
+            actual_fret = self.capo_position + fret
+            if actual_fret <= self.fret_count:
+                return self.string_notes[string_idx][actual_fret]
+            return None
+    
     def detect_key(self, notes):
         """Detect the key/chord of the lick based on note patterns"""
         if not notes:
@@ -94,8 +107,9 @@ class FretboardView(QGraphicsView):
             if "fret" in note:
                 string_idx = note.get("string")
                 fret = note.get("fret")
-                note_name = self.string_notes[string_idx][fret]
-                note_counts[note_name] = note_counts.get(note_name, 0) + 1
+                note_name = self.get_note_at_position(string_idx, fret)
+                if note_name:
+                    note_counts[note_name] = note_counts.get(note_name, 0) + 1
         
         # Define chord patterns (root, third, fifth)
         chord_patterns = {
@@ -141,8 +155,9 @@ class FretboardView(QGraphicsView):
             if "fret" in note:
                 string_idx = note.get("string")
                 fret = note.get("fret")
-                note_name = self.string_notes[string_idx][fret]
-                note_sequence.append(note_name)
+                note_name = self.get_note_at_position(string_idx, fret)
+                if note_name:
+                    note_sequence.append(note_name)
             elif "technique" in note:
                 note_sequence.append(note["technique"])
         
@@ -269,7 +284,7 @@ class FretboardView(QGraphicsView):
                 y = self.top_margin + (string_idx * self.string_spacing)
                 
                 # Get the note name for this position
-                note_name = self.string_notes[string_idx][fret]
+                note_name = self.get_note_at_position(string_idx, fret)
                 
                 # Create text item for note name
                 note_text = QGraphicsTextItem(note_name)
@@ -392,6 +407,11 @@ class FretboardView(QGraphicsView):
         
         super().mousePressEvent(event)
 
+    def set_capo_position(self, position):
+        """Set the capo position (0-12)"""
+        self.capo_position = max(0, min(self.fret_count, position))
+        self.redraw_current_measure()
+
 
 class DraggableButton(QPushButton):
     def __init__(self, text, mime_text, parent=None):
@@ -459,6 +479,31 @@ class LickEditor(QWidget):
         editor_widget = QWidget()
         editor_widget.setStyleSheet("background-color: #F5F5F5; border-radius: 10px;")
         editor_layout = QVBoxLayout(editor_widget)
+        
+        # Capo control
+        capo_layout = QHBoxLayout()
+        capo_layout.addWidget(QLabel("Capo Position:"))
+        
+        self.capo_spinbox = QSpinBox()
+        self.capo_spinbox.setRange(0, 12)
+        self.capo_spinbox.setValue(0)
+        self.capo_spinbox.setStyleSheet("""
+            QSpinBox {
+                background-color: white;
+                border: 1px solid #BDC3C7;
+                border-radius: 3px;
+                padding: 5px;
+                min-width: 60px;
+            }
+            QSpinBox:hover {
+                border: 1px solid #3498DB;
+            }
+        """)
+        self.capo_spinbox.valueChanged.connect(self.update_capo_position)
+        capo_layout.addWidget(self.capo_spinbox)
+        capo_layout.addStretch()
+        
+        editor_layout.addLayout(capo_layout)
         
         # Fret number buttons for dragging (0-12)
         fret_buttons_layout = QHBoxLayout()
@@ -767,8 +812,9 @@ class LickEditor(QWidget):
                 if "fret" in note:
                     string_idx = note.get("string")
                     fret = note.get("fret")
-                    note_name = self.fretboard.string_notes[string_idx][fret]
-                    note_sequence.append(note_name)
+                    note_name = self.fretboard.get_note_at_position(string_idx, fret)
+                    if note_name:
+                        note_sequence.append(note_name)
                 elif "technique" in note:
                     note_sequence.append(note["technique"])
             
@@ -864,3 +910,8 @@ class LickEditor(QWidget):
                 self.fretboard.load_measure(current_idx)
                 self.update_measure_label()
                 self.update_note_display()
+
+    def update_capo_position(self, position):
+        """Update the capo position in the fretboard view"""
+        self.fretboard.set_capo_position(position)
+        self.update_note_display()
