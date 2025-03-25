@@ -1,12 +1,152 @@
 import os
 import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTreeView, QFileSystemModel, QLabel, QSplitter, QMessageBox
-from PyQt5.QtCore import Qt, QDir
-from PyQt5.QtGui import QIcon, QFont
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTreeView, QFileSystemModel, QLabel, QSplitter, QMessageBox, QMenu, QFileDialog
+from PyQt5.QtCore import Qt, QDir, QMimeData
+from PyQt5.QtGui import QIcon, QFont, QDragEnterEvent, QDropEvent
 import json
+import shutil
 
 from lick_editor import LickEditor
 from create_lick_dialog import CreateLickDialog
+
+class CustomTreeView(QTreeView):
+    def __init__(self, parent=None, base_dir=None):
+        super().__init__(parent)
+        self.base_dir = base_dir
+        self.setDragEnabled(True)
+        self.setAcceptDrops(True)
+        self.setDragDropMode(QTreeView.InternalMove)
+        self.setSelectionMode(QTreeView.SingleSelection)
+        
+    def contextMenuEvent(self, event):
+        """Handle right-click context menu"""
+        index = self.indexAt(event.pos())
+        if not index.isValid():
+            return
+            
+        path = self.model().filePath(index)
+        if not path:
+            return
+            
+        # Create context menu
+        menu = QMenu(self)
+        
+        # Add delete action for both files and folders
+        if os.path.isfile(path) and path.lower().endswith('.lick'):
+            delete_action = menu.addAction("Delete File")
+            delete_action.triggered.connect(lambda: self.delete_item(path))
+        elif os.path.isdir(path) and path != self.base_dir:
+            delete_action = menu.addAction("Delete Folder")
+            delete_action.triggered.connect(lambda: self.delete_item(path))
+        
+        # Show the menu
+        menu.exec_(self.mapToGlobal(event.pos()))
+    
+    def delete_item(self, path):
+        """Delete a file or folder"""
+        is_folder = os.path.isdir(path)
+        item_type = "Folder" if is_folder else "File"
+        name = os.path.basename(path)
+        
+        reply = QMessageBox.question(
+            self,
+            "Confirm Delete",
+            f"Are you sure you want to delete '{name}' and all its contents?" if is_folder else f"Are you sure you want to delete '{name}'?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            try:
+                # Get the parent directory before deletion
+                parent_dir = os.path.dirname(path)
+                
+                if is_folder:
+                    shutil.rmtree(path)
+                else:
+                    os.remove(path)
+                
+                # Refresh the model by setting the root path again
+                self.model().setRootPath(self.model().rootPath())
+                
+                QMessageBox.information(self, "Success", f"{item_type} deleted successfully.")
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Could not delete {item_type.lower()}: {str(e)}")
+    
+    def dragEnterEvent(self, event):
+        """Handle drag enter events"""
+        if event.mimeData().hasUrls():
+            # Check if any of the dragged files are .lick files
+            for url in event.mimeData().urls():
+                if url.toLocalFile().lower().endswith('.lick'):
+                    event.acceptProposedAction()
+                    return
+        event.ignore()
+    
+    def dragMoveEvent(self, event):
+        """Handle drag move events"""
+        if event.mimeData().hasUrls():
+            # Check if we're over a valid drop target (folder)
+            index = self.indexAt(event.pos())
+            if index.isValid():
+                path = self.model().filePath(index)
+                if os.path.isdir(path) or path == self.base_dir:  # Allow root directory
+                    event.acceptProposedAction()
+                    return
+        event.ignore()
+    
+    def dropEvent(self, event):
+        """Handle drop events for files"""
+        if not event.mimeData().hasUrls():
+            event.ignore()
+            return
+            
+        # Get the target folder
+        target_index = self.indexAt(event.pos())
+        if not target_index.isValid():
+            event.ignore()
+            return
+            
+        target_path = self.model().filePath(target_index)
+        if not os.path.isdir(target_path):
+            target_path = os.path.dirname(target_path)
+            
+        success = False
+        for url in event.mimeData().urls():
+            source_path = url.toLocalFile()
+            if not source_path.lower().endswith('.lick'):
+                continue
+                
+            try:
+                filename = os.path.basename(source_path)
+                target_file = os.path.join(target_path, filename)
+                
+                # Handle duplicate files
+                if os.path.exists(target_file):
+                    reply = QMessageBox.question(
+                        self,
+                        "File Exists",
+                        f"A file with the name '{filename}' already exists in this folder. Do you want to overwrite it?",
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.No
+                    )
+                    if reply == QMessageBox.No:
+                        continue
+                
+                # Move the file instead of copying
+                shutil.move(source_path, target_file)
+                success = True
+                
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Could not move file: {str(e)}")
+        
+        if success:
+            # Refresh the view
+            self.model().setRootPath(self.model().rootPath())
+            self.expandAll()
+            event.acceptProposedAction()
+        else:
+            event.ignore()
 
 class LickHouseApp(QMainWindow):
     def __init__(self):
@@ -34,9 +174,12 @@ class LickHouseApp(QMainWindow):
             }
         """)
         
-        # Set up data directory
-        self.base_dir = os.path.join(os.path.expanduser("~"), "LickHouse")
+        # Set up data directory in Documents folder for cloud sync
+        self.base_dir = os.path.join(os.path.expanduser("~"), "Documents", "LickHouse")
         self.init_directory_structure()
+        
+        # Check if the directory is in a cloud-synced location
+        self.check_cloud_sync()
         
         # Main layout setup
         main_widget = QWidget()
@@ -60,8 +203,8 @@ class LickHouseApp(QMainWindow):
         library_label.setStyleSheet("color: #2C3E50; margin-bottom: 10px;")
         left_layout.addWidget(library_label)
         
-        # Folder view
-        self.folder_view = QTreeView()
+        # Folder view using custom TreeView
+        self.folder_view = CustomTreeView(base_dir=self.base_dir)
         self.folder_view.setMinimumWidth(250)
         self.file_model = QFileSystemModel()
         self.file_model.setRootPath(self.base_dir)
@@ -288,6 +431,86 @@ class LickHouseApp(QMainWindow):
                 QMessageBox.information(self, "Success", f"New lick '{lick_name}' created successfully.")
             except Exception as e:
                 QMessageBox.warning(self, "Error Creating Lick", f"Could not create lick file: {str(e)}")
+
+    def check_cloud_sync(self):
+        """Check if the LickHouse directory is in a cloud-synced location"""
+        # Common Google Drive paths
+        google_drive_paths = [
+            os.path.expanduser("~\\Google Drive"),
+            os.path.expanduser("~\\Google Drive\\My Drive"),
+            os.path.expanduser("~\\Google Drive\\Shared drives")
+        ]
+        
+        # Find the first existing Google Drive path
+        google_drive_path = None
+        for path in google_drive_paths:
+            if os.path.exists(path):
+                google_drive_path = path
+                break
+        
+        if google_drive_path:
+            # If we found Google Drive, suggest using it
+            reply = QMessageBox.question(
+                self,
+                "Google Drive Sync",
+                f"Google Drive was detected at: {google_drive_path}\n\n"
+                "Would you like to store your licks in Google Drive for automatic syncing?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+            
+            if reply == QMessageBox.Yes:
+                # Create LickHouse folder in Google Drive
+                self.base_dir = os.path.join(google_drive_path, "LickHouse")
+                self.init_directory_structure()
+                
+                # Show sync instructions
+                QMessageBox.information(
+                    self,
+                    "Sync Setup Complete",
+                    "Your licks will now automatically sync with Google Drive.\n\n"
+                    "Important notes:\n"
+                    "1. Changes will sync automatically when you save\n"
+                    "2. You can access your licks from any device with Google Drive\n"
+                    "3. Make sure Google Drive is running for sync to work\n"
+                    "4. If you see a cloud icon in Google Drive, the file is synced"
+                )
+                return
+        
+        # If no Google Drive found or user declined, use Documents folder
+        documents_path = os.path.expanduser("~\\Documents")
+        cloud_sync_warning = """
+            For the best experience with LickHouse across multiple computers:
+            1. Make sure your Documents folder is synced with a cloud service (Dropbox, Google Drive, or OneDrive)
+            2. The LickHouse folder will be created in your Documents folder
+            3. Your licks will automatically sync across all your computers
+            
+            Would you like to continue with the default location in Documents?
+        """
+        
+        reply = QMessageBox.question(
+            self,
+            "Cloud Sync Recommendation",
+            cloud_sync_warning,
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes
+        )
+        
+        if reply == QMessageBox.No:
+            # Let user choose a different location
+            new_dir = QFileDialog.getExistingDirectory(
+                self,
+                "Choose LickHouse Location",
+                documents_path,
+                QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks
+            )
+            if new_dir:
+                self.base_dir = os.path.join(new_dir, "LickHouse")
+                self.init_directory_structure()
+            else:
+                # If user cancels, use default location
+                self.base_dir = os.path.join(documents_path, "LickHouse")
+                self.init_directory_structure()
 
 def main():
     app = QApplication(sys.argv)
