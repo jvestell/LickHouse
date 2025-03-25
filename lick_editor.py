@@ -78,49 +78,10 @@ class FretboardView(QGraphicsView):
         # Enable drag and drop
         self.setAcceptDrops(True)
         self.setDragMode(QGraphicsView.NoDrag)
-        
-        # Add key detection colors
-        self.key_label_color = QColor("#2C3E50")  # Dark blue-gray for key label
-        
-        # Add note sequence display
-        self.note_sequence_label = QLabel()
-        self.note_sequence_label.setStyleSheet("""
-            QLabel {
-                color: #2C3E50;
-                font-weight: bold;
-                padding: 5px;
-                background-color: #F5F5F5;
-                border-radius: 5px;
-            }
-        """)
-        
-        # Add key label
-        self.key_label = QLabel()
-        self.key_label.setStyleSheet("""
-            QLabel {
-                color: #2C3E50;
-                font-weight: bold;
-                padding: 5px;
-                background-color: #F5F5F5;
-                border-radius: 5px;
-            }
-        """)
-        
-        # Add to scene using proxy widgets
-        self.note_sequence_proxy = self.scene.addWidget(self.note_sequence_label)
-        self.key_label_proxy = self.scene.addWidget(self.key_label)
-        
-        # Position labels
-        self.update_label_positions()
     
     def update_label_positions(self):
         """Update positions of the note sequence and key labels"""
-        # Position note sequence label below fret buttons
-        self.note_sequence_proxy.setPos(self.left_margin, 10)
-        
-        # Position key label in upper right
-        key_x = self.left_margin + (self.fret_count * self.fret_spacing) - 100
-        self.key_label_proxy.setPos(key_x, 10)
+        pass  # Remove this method as it's no longer needed
     
     def detect_key(self, notes):
         """Detect the key/chord of the lick based on note patterns"""
@@ -256,10 +217,6 @@ class FretboardView(QGraphicsView):
         # Draw note names if enabled
         if self.show_notes:
             self.draw_note_names(measure_data["notes"])
-            
-        # Update note sequence and key labels
-        self.note_sequence_label.setText(f"Notes: {self.get_note_sequence(measure_data['notes'])}")
-        self.key_label.setText(self.detect_key(measure_data["notes"]))
             
         # Draw the tab notes
         for note in measure_data["notes"]:
@@ -532,10 +489,11 @@ class LickEditor(QWidget):
             QLabel {
                 color: #2C3E50;
                 font-weight: bold;
-                padding: 5px;
+                padding: 10px;
                 background-color: #F5F5F5;
                 border-radius: 5px;
-                min-height: 25px;
+                min-height: 35px;
+                font-size: 16px;
             }
         """)
         editor_layout.addWidget(self.note_sequence_label)
@@ -546,10 +504,11 @@ class LickEditor(QWidget):
             QLabel {
                 color: #2C3E50;
                 font-weight: bold;
-                padding: 5px;
+                padding: 10px;
                 background-color: #F5F5F5;
                 border-radius: 5px;
-                min-height: 25px;
+                min-height: 35px;
+                font-size: 16px;
             }
         """)
         editor_layout.addWidget(self.key_label)
