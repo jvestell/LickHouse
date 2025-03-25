@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
                              QScrollArea, QFrame, QGraphicsView, QGraphicsScene, 
                              QGraphicsItem, QGraphicsTextItem, QGraphicsLineItem,
-                             QGraphicsEllipseItem)
+                             QGraphicsEllipseItem, QMessageBox)
 from PyQt5.QtCore import Qt, QRectF, QPointF, QMimeData, pyqtSignal
 from PyQt5.QtGui import QPen, QFont, QColor, QBrush, QPainter, QDragEnterEvent, QDropEvent, QDrag
 import json
@@ -621,10 +621,29 @@ class LickEditor(QWidget):
         self.add_measure_btn.setStyleSheet(nav_btn_style)
         self.add_measure_btn.clicked.connect(self.add_measure)
         
+        # Add Delete Measure button with red style
+        self.delete_measure_btn = QPushButton("Delete Measure")
+        self.delete_measure_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #E74C3C;
+                color: white;
+                border-radius: 5px;
+                padding: 8px;
+            }
+            QPushButton:hover {
+                background-color: #C0392B;
+            }
+            QPushButton:pressed {
+                background-color: #922B21;
+            }
+        """)
+        self.delete_measure_btn.clicked.connect(self.delete_measure)
+        
         nav_layout.addWidget(self.prev_btn)
         nav_layout.addWidget(self.measure_label)
         nav_layout.addWidget(self.next_btn)
         nav_layout.addWidget(self.add_measure_btn)
+        nav_layout.addWidget(self.delete_measure_btn)
         editor_layout.addLayout(nav_layout)
         
         # Button layout for save and delete
@@ -821,3 +840,27 @@ class LickEditor(QWidget):
             
             # After removing the note and redrawing
             self.update_note_display()
+
+    def delete_measure(self):
+        """Delete the current measure"""
+        if len(self.fretboard.measures) > 1:  # Keep at least one measure
+            # Show confirmation dialog
+            reply = QMessageBox.question(
+                self,
+                'Delete Measure',
+                'Are you sure you want to delete this measure?',
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            
+            if reply == QMessageBox.Yes:
+                current_idx = self.fretboard.current_measure
+                self.fretboard.measures.pop(current_idx)
+                
+                # If we deleted the last measure, move to the new last measure
+                if current_idx >= len(self.fretboard.measures):
+                    current_idx = len(self.fretboard.measures) - 1
+                
+                self.fretboard.load_measure(current_idx)
+                self.update_measure_label()
+                self.update_note_display()
