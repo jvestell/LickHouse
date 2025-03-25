@@ -78,6 +78,114 @@ class FretboardView(QGraphicsView):
         # Enable drag and drop
         self.setAcceptDrops(True)
         self.setDragMode(QGraphicsView.NoDrag)
+        
+        # Add key detection colors
+        self.key_label_color = QColor("#2C3E50")  # Dark blue-gray for key label
+        
+        # Add note sequence display
+        self.note_sequence_label = QLabel()
+        self.note_sequence_label.setStyleSheet("""
+            QLabel {
+                color: #2C3E50;
+                font-weight: bold;
+                padding: 5px;
+                background-color: #F5F5F5;
+                border-radius: 5px;
+            }
+        """)
+        
+        # Add key label
+        self.key_label = QLabel()
+        self.key_label.setStyleSheet("""
+            QLabel {
+                color: #2C3E50;
+                font-weight: bold;
+                padding: 5px;
+                background-color: #F5F5F5;
+                border-radius: 5px;
+            }
+        """)
+        
+        # Add to scene using proxy widgets
+        self.note_sequence_proxy = self.scene.addWidget(self.note_sequence_label)
+        self.key_label_proxy = self.scene.addWidget(self.key_label)
+        
+        # Position labels
+        self.update_label_positions()
+    
+    def update_label_positions(self):
+        """Update positions of the note sequence and key labels"""
+        # Position note sequence label below fret buttons
+        self.note_sequence_proxy.setPos(self.left_margin, 10)
+        
+        # Position key label in upper right
+        key_x = self.left_margin + (self.fret_count * self.fret_spacing) - 100
+        self.key_label_proxy.setPos(key_x, 10)
+    
+    def detect_key(self, notes):
+        """Detect the key/chord of the lick based on note patterns"""
+        if not notes:
+            return "No key detected"
+            
+        # Count occurrences of each note
+        note_counts = {}
+        for note in notes:
+            if "fret" in note:
+                string_idx = note.get("string")
+                fret = note.get("fret")
+                note_name = self.string_notes[string_idx][fret]
+                note_counts[note_name] = note_counts.get(note_name, 0) + 1
+        
+        # Define chord patterns (root, third, fifth)
+        chord_patterns = {
+            "C": ["C", "E", "G"],
+            "C#": ["C#", "F", "G#"],
+            "D": ["D", "F#", "A"],
+            "D#": ["D#", "G", "A#"],
+            "E": ["E", "G#", "B"],
+            "F": ["F", "A", "C"],
+            "F#": ["F#", "A#", "C#"],
+            "G": ["G", "B", "D"],
+            "G#": ["G#", "C", "D#"],
+            "A": ["A", "C#", "E"],
+            "A#": ["A#", "D", "F"],
+            "B": ["B", "D#", "F#"]
+        }
+        
+        # Find the best matching key
+        best_key = None
+        best_score = 0
+        
+        for key, pattern in chord_patterns.items():
+            score = 0
+            for note in pattern:
+                score += note_counts.get(note, 0)
+            if score > best_score:
+                best_score = score
+                best_key = key
+        
+        return f"Key of {best_key}" if best_key else "No key detected"
+    
+    def get_note_sequence(self, notes):
+        """Get the sequence of notes from left to right"""
+        if not notes:
+            return "No notes"
+            
+        # Sort notes by x position
+        sorted_notes = sorted(notes, key=lambda n: n.get("x", 0))
+        
+        # Get note names in sequence
+        note_sequence = []
+        for note in sorted_notes:
+            if "fret" in note:
+                string_idx = note.get("string")
+                fret = note.get("fret")
+                note_name = self.string_notes[string_idx][fret]
+                note_sequence.append(note_name)
+            elif "technique" in note:
+                note_sequence.append(note["technique"])
+        
+        return " → ".join(note_sequence)
     
     def toggle_notes(self, show):
         """Toggle the display of note names"""
@@ -148,6 +256,10 @@ class FretboardView(QGraphicsView):
         # Draw note names if enabled
         if self.show_notes:
             self.draw_note_names(measure_data["notes"])
+            
+        # Update note sequence and key labels
+        self.note_sequence_label.setText(f"Notes: {self.get_note_sequence(measure_data['notes'])}")
+        self.key_label.setText(self.detect_key(measure_data["notes"]))
             
         # Draw the tab notes
         for note in measure_data["notes"]:
@@ -322,7 +434,6 @@ class FretboardView(QGraphicsView):
                     # Redraw tablature
                     self.clear_tablature()
                     self.draw_tablature(self.measures[self.current_measure])
-                    break
         
         super().mousePressEvent(event)
 
@@ -414,6 +525,34 @@ class LickEditor(QWidget):
         fret_buttons_layout.addWidget(fret_button_widget)
         fret_buttons_layout.addStretch()
         editor_layout.addLayout(fret_buttons_layout)
+        
+        # Note sequence display
+        self.note_sequence_label = QLabel("Notes: ")
+        self.note_sequence_label.setStyleSheet("""
+            QLabel {
+                color: #2C3E50;
+                font-weight: bold;
+                padding: 5px;
+                background-color: #F5F5F5;
+                border-radius: 5px;
+                min-height: 25px;
+            }
+        """)
+        editor_layout.addWidget(self.note_sequence_label)
+        
+        # Key display
+        self.key_label = QLabel("Key: ")
+        self.key_label.setStyleSheet("""
+            QLabel {
+                color: #2C3E50;
+                font-weight: bold;
+                padding: 5px;
+                background-color: #F5F5F5;
+                border-radius: 5px;
+                min-height: 25px;
+            }
+        """)
+        editor_layout.addWidget(self.key_label)
         
         # Show Notes toggle
         notes_toggle_layout = QHBoxLayout()
@@ -639,3 +778,49 @@ class LickEditor(QWidget):
     def toggle_notes(self):
         """Toggle the display of note names on the fretboard"""
         self.fretboard.toggle_notes(self.show_notes_toggle.isChecked())
+
+    def update_note_display(self):
+        """Update the note sequence and key displays"""
+        if self.fretboard.current_measure < len(self.fretboard.measures):
+            current_measure = self.fretboard.measures[self.fretboard.current_measure]
+            notes = current_measure.get("notes", [])
+            
+            # Update note sequence
+            note_sequence = []
+            for note in sorted(notes, key=lambda n: n.get("x", 0)):
+                if "fret" in note:
+                    string_idx = note.get("string")
+                    fret = note.get("fret")
+                    note_name = self.fretboard.string_notes[string_idx][fret]
+                    note_sequence.append(note_name)
+                elif "technique" in note:
+                    note_sequence.append(note["technique"])
+            
+            self.note_sequence_label.setText(f"Notes: {' → '.join(note_sequence)}")
+            
+            # Update key
+            self.key_label.setText(f"Key: {self.fretboard.detect_key(notes)}")
+    
+    def load_measure(self, measure_index):
+        """Load a specific measure into the view"""
+        if 0 <= measure_index < len(self.fretboard.measures):
+            self.fretboard.current_measure = measure_index
+            self.fretboard.clear_tablature()
+            self.fretboard.draw_tablature(self.fretboard.measures[measure_index])
+            self.update_note_display()
+            self.update_measure_label()
+    
+    def dropEvent(self, event):
+        """Handle drop events to add notes to the fretboard"""
+        # ... existing drop event code ...
+        
+        # After adding the note and redrawing
+        self.update_note_display()
+    
+    def mousePressEvent(self, event):
+        """Handle mouse press events for note deletion"""
+        if event.button() == Qt.RightButton:
+            # ... existing mouse press event code ...
+            
+            # After removing the note and redrawing
+            self.update_note_display()
