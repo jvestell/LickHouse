@@ -35,6 +35,7 @@ class FretboardView(QGraphicsView):
         self.fret_lines = []
         self.string_labels = []
         self.note_items = []
+        self.note_text_items = []  # For displaying note names
         
         # Colors
         self.background_color = QColor("#F5F5F5")  # Light gray background
@@ -44,6 +45,21 @@ class FretboardView(QGraphicsView):
         self.note_color = QColor("#3498DB")         # Matte blue for notes
         self.text_color = QColor("#FFFFFF")         # White text
         self.string_label_color = QColor("#2C3E50") # Dark blue-gray for labels
+        self.faint_note_color = QColor(128, 128, 128, 128)  # Semi-transparent gray
+        self.bold_note_color = QColor(64, 64, 64, 255)      # Solid dark gray
+        
+        # Note display state
+        self.show_notes = False
+        
+        # Note mappings for each string (0-12 frets)
+        self.string_notes = {
+            0: ["E", "F", "F#", "G", "G#", "A", "A#", "B", "C", "C#", "D", "D#", "E"],  # High E
+            1: ["B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"],  # B
+            2: ["G", "G#", "A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G"],  # G
+            3: ["D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B", "C", "C#", "D"],  # D
+            4: ["A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A"],  # A
+            5: ["E", "F", "F#", "G", "G#", "A", "A#", "B", "C", "C#", "D", "D#", "E"],  # Low E
+        }
         
         # Set background color
         self.setBackgroundBrush(QBrush(self.background_color))
@@ -61,7 +77,18 @@ class FretboardView(QGraphicsView):
         
         # Enable drag and drop
         self.setAcceptDrops(True)
-        self.setDragMode(QGraphicsView.NoDrag)  # We only want to accept drops, not initiate drags
+        self.setDragMode(QGraphicsView.NoDrag)
+    
+    def toggle_notes(self, show):
+        """Toggle the display of note names"""
+        self.show_notes = show
+        self.redraw_current_measure()
+    
+    def redraw_current_measure(self):
+        """Redraw the current measure with or without notes"""
+        self.clear_tablature()
+        if self.current_measure < len(self.measures):
+            self.draw_tablature(self.measures[self.current_measure])
     
     def draw_fretboard(self):
         """Draw the guitar fretboard with strings and frets"""
@@ -99,7 +126,7 @@ class FretboardView(QGraphicsView):
     def clear_all_items(self):
         """Clear all graphics items from the scene"""
         # Remove all items from the scene
-        for item in self.string_lines + self.fret_lines + self.string_labels + self.note_items:
+        for item in self.string_lines + self.fret_lines + self.string_labels + self.note_items + self.note_text_items:
             if item and item.scene():
                 self.scene.removeItem(item)
         
@@ -108,18 +135,21 @@ class FretboardView(QGraphicsView):
         self.fret_lines.clear()
         self.string_labels.clear()
         self.note_items.clear()
+        self.note_text_items.clear()
     
     def draw_tablature(self, measure_data):
         """Draw the tablature notes onto the fretboard"""
         if not measure_data or "notes" not in measure_data:
             return
             
-        # Clear existing notes
-        for item in self.note_items:
-            if item and item.scene():
-                self.scene.removeItem(item)
-        self.note_items.clear()
+        # Clear existing notes and note text
+        self.clear_tablature()
             
+        # Draw note names if enabled
+        if self.show_notes:
+            self.draw_note_names(measure_data["notes"])
+            
+        # Draw the tab notes
         for note in measure_data["notes"]:
             string_idx = note.get("string")
             x = note.get("x", 0)
@@ -153,13 +183,61 @@ class FretboardView(QGraphicsView):
                 self.scene.addItem(text)
                 self.note_items.append(text)
     
+    def draw_note_names(self, notes):
+        """Draw note names for all frets, with different styling for used notes"""
+        # Create a set of used positions for quick lookup
+        used_positions = set()
+        for note in notes:
+            if "fret" in note:
+                string_idx = note.get("string")
+                fret = note.get("fret")
+                used_positions.add((string_idx, fret))
+        
+        # Draw all possible note positions
+        for string_idx in range(self.string_count):
+            for fret in range(self.fret_count + 1):
+                x = self.left_margin + (fret * self.fret_spacing)
+                y = self.top_margin + (string_idx * self.string_spacing)
+                
+                # Get the note name for this position
+                note_name = self.string_notes[string_idx][fret]
+                
+                # Create text item for note name
+                note_text = QGraphicsTextItem(note_name)
+                note_text.setFont(QFont("Arial", 8))
+                
+                # Set color based on whether this position is used
+                if (string_idx, fret) in used_positions:
+                    note_text.setDefaultTextColor(self.bold_note_color)
+                    note_text.setFont(QFont("Arial", 8, QFont.Bold))
+                else:
+                    note_text.setDefaultTextColor(self.faint_note_color)
+                
+                # Position the text below the fret position
+                text_width = note_text.boundingRect().width()
+                note_text.setPos(x - text_width/2, y + 15)
+                
+                self.scene.addItem(note_text)
+                self.note_text_items.append(note_text)
+    
+    def get_fret_from_x(self, x):
+        """Convert x coordinate to nearest fret number"""
+        fret_pos = (x - self.left_margin) / self.fret_spacing
+        return max(0, min(self.fret_count, round(fret_pos)))
+    
     def clear_tablature(self):
-        """Clear all tablature notes but keep the fretboard"""
-        # Clear only the note items
+        """Clear all tablature notes and note names but keep the fretboard"""
+        # Clear note items
         for item in self.note_items:
             if item and item.scene():
                 self.scene.removeItem(item)
         self.note_items.clear()
+        
+        # Clear note text items
+        for item in self.note_text_items:
+            if item and item.scene():
+                self.scene.removeItem(item)
+        self.note_text_items.clear()
     
     def load_measure(self, measure_index):
         """Load a specific measure into the view"""
@@ -196,20 +274,30 @@ class FretboardView(QGraphicsView):
             if 0 <= string_idx < self.string_count:
                 # Add note to the current measure
                 if self.current_measure < len(self.measures):
-                    # Add new note with exact position
-                    note = {
-                        "string": string_idx,
-                        "x": pos.x(),
-                        "y": pos.y()
-                    }
-                    
-                    # Handle both fret numbers and techniques
+                    # Calculate the actual fret number from the dropped text
                     if dropped_text.isdigit():
-                        note["fret"] = int(dropped_text)
+                        fret = int(dropped_text)
+                        # Ensure the fret is within valid range
+                        if 0 <= fret <= self.fret_count:
+                            # Add new note with exact position
+                            note = {
+                                "string": string_idx,
+                                "fret": fret,  # Store the actual fret number
+                                "x": pos.x(),
+                                "y": pos.y()
+                            }
+                            self.measures[self.current_measure]["notes"].append(note)
                     else:
-                        note["technique"] = dropped_text
-                    
-                    self.measures[self.current_measure]["notes"].append(note)
+                        # For techniques, we need to determine the fret from the x position
+                        fret = self.get_fret_from_x(pos.x())
+                        note = {
+                            "string": string_idx,
+                            "fret": fret,
+                            "technique": dropped_text,
+                            "x": pos.x(),
+                            "y": pos.y()
+                        }
+                        self.measures[self.current_measure]["notes"].append(note)
                     
                     # Redraw tablature
                     self.clear_tablature()
@@ -326,6 +414,37 @@ class LickEditor(QWidget):
         fret_buttons_layout.addWidget(fret_button_widget)
         fret_buttons_layout.addStretch()
         editor_layout.addLayout(fret_buttons_layout)
+        
+        # Show Notes toggle
+        notes_toggle_layout = QHBoxLayout()
+        notes_toggle_layout.addStretch()
+        
+        self.show_notes_toggle = QPushButton("Show Notes")
+        self.show_notes_toggle.setCheckable(True)
+        self.show_notes_toggle.setStyleSheet("""
+            QPushButton {
+                background-color: #95A5A6;
+                color: white;
+                border-radius: 5px;
+                font-weight: bold;
+                padding: 8px 15px;
+                min-width: 100px;
+            }
+            QPushButton:checked {
+                background-color: #2ECC71;
+            }
+            QPushButton:hover {
+                background-color: #7F8C8D;
+            }
+            QPushButton:checked:hover {
+                background-color: #27AE60;
+            }
+        """)
+        self.show_notes_toggle.clicked.connect(self.toggle_notes)
+        notes_toggle_layout.addWidget(self.show_notes_toggle)
+        notes_toggle_layout.addStretch()
+        
+        editor_layout.addLayout(notes_toggle_layout)
         
         # Fretboard view
         self.fretboard = FretboardView()
@@ -516,3 +635,7 @@ class LickEditor(QWidget):
     def delete_lick(self):
         """Signal to delete the current lick"""
         self.delete_requested.emit()
+    
+    def toggle_notes(self):
+        """Toggle the display of note names on the fretboard"""
+        self.fretboard.toggle_notes(self.show_notes_toggle.isChecked())
