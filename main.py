@@ -5,6 +5,7 @@ from PyQt5.QtCore import Qt, QDir, QMimeData
 from PyQt5.QtGui import QIcon, QFont, QDragEnterEvent, QDropEvent
 import json
 import shutil
+import time
 
 from lick_editor import LickEditor
 from create_lick_dialog import CreateLickDialog
@@ -62,14 +63,41 @@ class CustomTreeView(QTreeView):
                 parent_dir = os.path.dirname(path)
                 
                 if is_folder:
-                    shutil.rmtree(path)
+                    # For folders, we need to ensure all files are closed
+                    # and the folder is not being watched by any process
+                    shutil.rmtree(path, ignore_errors=True)
+                    
+                    # If the folder still exists after rmtree, try to remove it again
+                    if os.path.exists(path):
+                        try:
+                            os.rmdir(path)
+                        except Exception as e:
+                            QMessageBox.warning(
+                                self,
+                                "Warning",
+                                f"Folder may not be fully deleted. Please check Google Drive and try again.\nError: {str(e)}"
+                            )
                 else:
                     os.remove(path)
                 
-                # Refresh the model by setting the root path again
-                self.model().setRootPath(self.model().rootPath())
+                # Force a complete refresh of the file system model
+                self.model().setRootPath("")  # Clear the root path
+                self.model().setRootPath(self.model().rootPath())  # Reset the root path
                 
-                QMessageBox.information(self, "Success", f"{item_type} deleted successfully.")
+                # Wait a moment for Google Drive to sync
+                time.sleep(1)
+                
+                # Check if the item still exists
+                if os.path.exists(path):
+                    QMessageBox.warning(
+                        self,
+                        "Sync Warning",
+                        "The item may not be fully synced with Google Drive. "
+                        "Please check Google Drive and try again if needed."
+                    )
+                else:
+                    QMessageBox.information(self, "Success", f"{item_type} deleted successfully.")
+                
             except Exception as e:
                 QMessageBox.warning(self, "Error", f"Could not delete {item_type.lower()}: {str(e)}")
     
