@@ -343,8 +343,17 @@ class FretboardView(QGraphicsView):
             if 0 <= string_idx < self.string_count:
                 # Add note to the current measure
                 if self.current_measure < len(self.measures):
-                    # Calculate the actual fret number from the dropped text
-                    if dropped_text.isdigit():
+                    # Handle techniques first
+                    if dropped_text in ["h", "p", "/"]:
+                        note = {
+                            "string": string_idx,
+                            "technique": dropped_text,
+                            "x": pos.x(),
+                            "y": pos.y()
+                        }
+                        self.measures[self.current_measure]["notes"].append(note)
+                    # Handle fret numbers
+                    elif dropped_text.isdigit():
                         fret = int(dropped_text)
                         # Ensure the fret is within valid range
                         if 0 <= fret <= self.fret_count:
@@ -356,17 +365,6 @@ class FretboardView(QGraphicsView):
                                 "y": pos.y()
                             }
                             self.measures[self.current_measure]["notes"].append(note)
-                    else:
-                        # For techniques, we need to determine the fret from the x position
-                        fret = self.get_fret_from_x(pos.x())
-                        note = {
-                            "string": string_idx,
-                            "fret": fret,
-                            "technique": dropped_text,
-                            "x": pos.x(),
-                            "y": pos.y()
-                        }
-                        self.measures[self.current_measure]["notes"].append(note)
                     
                     # Redraw tablature
                     self.clear_tablature()
@@ -771,10 +769,50 @@ class LickEditor(QWidget):
     
     def dropEvent(self, event):
         """Handle drop events to add notes to the fretboard"""
-        # ... existing drop event code ...
+        pos = self.mapToScene(event.pos())
         
-        # After adding the note and redrawing
-        self.update_note_display()
+        # Check if within fretboard bounds
+        if (self.left_margin <= pos.x() <= self.left_margin + (self.fret_count * self.fret_spacing) and
+            self.top_margin <= pos.y() <= self.top_margin + ((self.string_count - 1) * self.string_spacing)):
+            
+            # Determine string and fret
+            string_idx = round((pos.y() - self.top_margin) / self.string_spacing)
+            
+            # Get the dropped item text
+            dropped_text = event.mimeData().text()
+            
+            # Ensure valid string
+            if 0 <= string_idx < self.string_count:
+                # Add note to the current measure
+                if self.current_measure < len(self.measures):
+                    # Handle techniques first
+                    if dropped_text in ["h", "p", "/"]:
+                        note = {
+                            "string": string_idx,
+                            "technique": dropped_text,
+                            "x": pos.x(),
+                            "y": pos.y()
+                        }
+                        self.measures[self.current_measure]["notes"].append(note)
+                    # Handle fret numbers
+                    elif dropped_text.isdigit():
+                        fret = int(dropped_text)
+                        # Ensure the fret is within valid range
+                        if 0 <= fret <= self.fret_count:
+                            # Add new note with exact position
+                            note = {
+                                "string": string_idx,
+                                "fret": fret,  # Store the actual fret number
+                                "x": pos.x(),
+                                "y": pos.y()
+                            }
+                            self.measures[self.current_measure]["notes"].append(note)
+                    
+                    # Redraw tablature
+                    self.clear_tablature()
+                    self.draw_tablature(self.measures[self.current_measure])
+            
+            event.acceptProposedAction()
     
     def mousePressEvent(self, event):
         """Handle mouse press events for note deletion"""
