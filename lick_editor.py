@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
                              QScrollArea, QFrame, QGraphicsView, QGraphicsScene, 
                              QGraphicsItem, QGraphicsTextItem, QGraphicsLineItem,
-                             QGraphicsEllipseItem, QMessageBox, QSpinBox)
+                             QGraphicsEllipseItem, QMessageBox, QSpinBox, QDialog)
 from PyQt5.QtCore import Qt, QRectF, QPointF, QMimeData, pyqtSignal
 from PyQt5.QtGui import QPen, QFont, QColor, QBrush, QPainter, QDragEnterEvent, QDropEvent, QDrag
 import json
@@ -99,7 +99,7 @@ class FretboardView(QGraphicsView):
     def detect_key(self, notes):
         """Detect the key/chord of the lick based on note patterns"""
         if not notes:
-            return "No key detected"
+            return "No key detected", []
             
         # Count occurrences of each note
         note_counts = {}
@@ -127,6 +127,22 @@ class FretboardView(QGraphicsView):
             "B": ["B", "D#", "F#"]
         }
         
+        # Define major scales
+        major_scales = {
+            "C": ["C", "D", "E", "F", "G", "A", "B"],
+            "C#": ["C#", "D#", "F", "F#", "G#", "A#", "C"],
+            "D": ["D", "E", "F#", "G", "A", "B", "C#"],
+            "D#": ["D#", "F", "G", "G#", "A#", "C", "D"],
+            "E": ["E", "F#", "G#", "A", "B", "C#", "D#"],
+            "F": ["F", "G", "A", "A#", "C", "D", "E"],
+            "F#": ["F#", "G#", "A#", "B", "C#", "D#", "F"],
+            "G": ["G", "A", "B", "C", "D", "E", "F#"],
+            "G#": ["G#", "A#", "C", "C#", "D#", "F", "G"],
+            "A": ["A", "B", "C#", "D", "E", "F#", "G#"],
+            "A#": ["A#", "C", "D", "D#", "F", "G", "A"],
+            "B": ["B", "C#", "D#", "E", "F#", "G#", "A#"]
+        }
+        
         # Find the best matching key
         best_key = None
         best_score = 0
@@ -139,7 +155,9 @@ class FretboardView(QGraphicsView):
                 best_score = score
                 best_key = key
         
-        return f"Key of {best_key}" if best_key else "No key detected"
+        if best_key:
+            return f"Key of {best_key}", major_scales[best_key]
+        return "No key detected", []
     
     def get_note_sequence(self, notes):
         """Get the sequence of notes from left to right"""
@@ -446,6 +464,76 @@ class DraggableButton(QPushButton):
             drag.exec_(Qt.CopyAction)
 
 
+class AllMeasuresView(QDialog):
+    def __init__(self, fretboard, parent=None):
+        super().__init__(parent)
+        self.fretboard = fretboard
+        self.setWindowTitle("All Measures")
+        self.setMinimumWidth(800)
+        self.setMinimumHeight(600)
+        
+        # Create layout
+        layout = QVBoxLayout(self)
+        layout.setSpacing(20)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        # Create scroll area
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        
+        # Create container widget for measures
+        container = QWidget()
+        container_layout = QVBoxLayout(container)
+        container_layout.setSpacing(40)
+        container_layout.setAlignment(Qt.AlignTop)
+        
+        # Add each measure
+        for i, measure in enumerate(fretboard.measures):
+            # Create measure container
+            measure_container = QWidget()
+            measure_layout = QVBoxLayout(measure_container)
+            measure_layout.setSpacing(10)
+            
+            # Add measure number and key
+            header = QLabel(f"Measure {i + 1} - Key: {fretboard.detect_key(measure['notes'])[0]}")
+            header.setFont(QFont("Segoe UI", 12, QFont.Bold))
+            header.setStyleSheet("color: #333333;")
+            measure_layout.addWidget(header)
+            
+            # Create a new FretboardView for this measure
+            measure_view = FretboardView()
+            measure_view.measures = [measure]
+            measure_view.current_measure = 0
+            measure_view.load_measure(0)
+            measure_view.setFixedHeight(200)  # Set a fixed height for each measure
+            measure_layout.addWidget(measure_view)
+            
+            container_layout.addWidget(measure_container)
+        
+        scroll.setWidget(container)
+        layout.addWidget(scroll)
+        
+        # Add close button
+        close_button = QPushButton("Close")
+        close_button.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                border-radius: 4px;
+                font-weight: 500;
+                padding: 8px 16px;
+                border: none;
+                min-width: 100px;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+        """)
+        close_button.clicked.connect(self.accept)
+        layout.addWidget(close_button, alignment=Qt.AlignCenter)
+
+
 class LickEditor(QWidget):
     # Add signals for saving and deleting
     save_requested = pyqtSignal(dict)
@@ -503,6 +591,9 @@ class LickEditor(QWidget):
         editor_layout = QVBoxLayout(editor_widget)
         editor_layout.setSpacing(15)
         
+        # Top controls layout (capo and show all measures)
+        top_controls = QHBoxLayout()
+        
         # Capo control
         capo_layout = QHBoxLayout()
         capo_label = QLabel("Capo Position:")
@@ -528,9 +619,31 @@ class LickEditor(QWidget):
         """)
         self.capo_spinbox.valueChanged.connect(self.update_capo_position)
         capo_layout.addWidget(self.capo_spinbox)
-        capo_layout.addStretch()
+        top_controls.addLayout(capo_layout)
         
-        editor_layout.addLayout(capo_layout)
+        # Add stretch to push show all measures button to the right
+        top_controls.addStretch()
+        
+        # Show All Measures button
+        self.show_all_measures_btn = QPushButton("Show All Measures")
+        self.show_all_measures_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                border-radius: 4px;
+                font-weight: 500;
+                padding: 8px 16px;
+                border: none;
+                min-width: 150px;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+        """)
+        self.show_all_measures_btn.clicked.connect(self.show_all_measures)
+        top_controls.addWidget(self.show_all_measures_btn)
+        
+        editor_layout.addLayout(top_controls)
         
         # Note sequence display
         self.note_sequence_label = QLabel("Notes: ")
@@ -896,8 +1009,20 @@ class LickEditor(QWidget):
             
             self.note_sequence_label.setText(f"Notes: {' → '.join(note_sequence)}")
             
-            # Update key
-            self.key_label.setText(f"Key: {self.fretboard.detect_key(notes)}")
+            # Update key and scale
+            key_text, scale = self.fretboard.detect_key(notes)
+            if scale:
+                # Create HTML for the scale display with highlighted root, third, and fifth
+                scale_html = []
+                for i, note in enumerate(scale):
+                    if i in [0, 2, 4]:  # Root, third, and fifth
+                        scale_html.append(f'<span style="color: #2196F3; font-weight: bold;">{note}</span>')
+                    else:
+                        scale_html.append(f'<span style="color: #666666;">{note}</span>')
+                scale_display = " ".join(scale_html)
+                self.key_label.setText(f"{key_text} - Scale: {scale_display}")
+            else:
+                self.key_label.setText(key_text)
     
     def load_measure(self, measure_index):
         """Load a specific measure into the view"""
@@ -991,3 +1116,8 @@ class LickEditor(QWidget):
         """Update the capo position in the fretboard view"""
         self.fretboard.set_capo_position(position)
         self.update_note_display()
+
+    def show_all_measures(self):
+        """Show all measures in a popup dialog"""
+        dialog = AllMeasuresView(self.fretboard, self)
+        dialog.exec_()
