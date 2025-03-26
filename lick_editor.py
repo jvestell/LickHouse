@@ -818,12 +818,20 @@ class LickEditor(QWidget):
         if not self.fretboard.measures:
             self.fretboard.measures = [{"notes": []}]
         
+        # Load capo position
+        if "capo_position" in lick_data:
+            self.fretboard.set_capo_position(lick_data["capo_position"])
+            self.capo_spinbox.setValue(lick_data["capo_position"])
+        
         # Reset to first measure
         self.fretboard.current_measure = 0
         self.fretboard.load_measure(0)
         
         # Update measure label
         self.update_measure_label()
+        
+        # Update note display
+        self.update_note_display()
     
     def update_measure_label(self):
         """Update the measure number display"""

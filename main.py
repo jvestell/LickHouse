@@ -350,9 +350,13 @@ class LickHouseApp(QMainWindow):
                     lick_data["name"] = os.path.splitext(os.path.basename(path))[0]
                 if "measures" not in lick_data:
                     lick_data["measures"] = [{"notes": []}]
+                if "capo_position" not in lick_data:
+                    lick_data["capo_position"] = 0
                     
                 # Load into editor
                 self.lick_editor.load_lick(lick_data)
+                # Set the capo position in the spinbox
+                self.lick_editor.capo_spinbox.setValue(lick_data["capo_position"])
                 
         except json.JSONDecodeError as e:
             print(f"JSON decode error: {str(e)}")  # Debug print
@@ -377,7 +381,8 @@ class LickHouseApp(QMainWindow):
             # Get data from editor
             lick_data = {
                 "name": self.lick_editor.title_label.text(),
-                "measures": self.lick_editor.fretboard.measures
+                "measures": self.lick_editor.fretboard.measures,
+                "capo_position": self.lick_editor.fretboard.capo_position  # Add capo position
             }
             
             # Save to file
