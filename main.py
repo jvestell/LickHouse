@@ -203,7 +203,7 @@ class LickHouseApp(QMainWindow):
         """)
         
         # Set up data directory in Documents folder for cloud sync
-        self.base_dir = os.path.join(os.path.expanduser("~"), "Documents", "LickHouse")
+        self.base_dir = r"C:\Users\jrodm\Documents\MyApps\LickHouseApp"
         self.init_directory_structure()
         
         # Check if the directory is in a cloud-synced location
